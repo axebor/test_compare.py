@@ -1,39 +1,37 @@
-from pdf2image import convert_from_path, convert_from_bytes
+import streamlit as st
+from pdf2image import convert_from_bytes
 from PIL import ImageChops
-import sys
 
-def compare_pdfs(pdf_a_path, pdf_b_path, dpi=300):
-    print("🔍 Konverterar PDF till bilder...")
+st.set_page_config(page_title="Testa bilddiff", layout="wide")
+st.title("🧪 Testa pixeljämförelse mellan två PDF:er")
 
-    with open(pdf_a_path, "rb") as f1, open(pdf_b_path, "rb") as f2:
-        images_a = convert_from_bytes(f1.read(), dpi=dpi)
-        images_b = convert_from_bytes(f2.read(), dpi=dpi)
+file1 = st.file_uploader("Ladda upp version A (PDF)", type=["pdf"])
+file2 = st.file_uploader("Ladda upp version B (PDF)", type=["pdf"])
 
-    num_pages = min(len(images_a), len(images_b))
+def compare_pdfs_bytes(pdf_a_bytes, pdf_b_bytes):
+    st.markdown("🔍 Kör jämförelse…")
+    images_a = convert_from_bytes(pdf_a_bytes, dpi=300)
+    images_b = convert_from_bytes(pdf_b_bytes, dpi=300)
 
-    for i in range(num_pages):
-        img_a = images_a[i].convert("RGB")
-        img_b = images_b[i].convert("RGB")
-
+    for i, (img_a, img_b) in enumerate(zip(images_a, images_b)):
+        img_a = img_a.convert("RGB")
+        img_b = img_b.convert("RGB")
         if img_a.size != img_b.size:
-            print(f"Sida {i+1}: Olika storlek → Skillnad!")
+            st.error(f"Sida {i+1}: Olika storlek")
             continue
 
         diff = ImageChops.difference(img_a, img_b)
-        diff_score = sum(sum(pixel) for pixel in diff.getdata())
-        print(f"Sida {i+1}: diff_score = {diff_score}")
+        diff_score = sum(sum(px) for px in diff.getdata())
 
-        # Spara diffbild om det finns skillnad
+        st.markdown(f"### Sida {i+1}")
+        st.write(f"🔬 Diff-score: `{diff_score}`")
         if diff_score > 0:
-            print(f"⚠️ Skillnad hittad på sida {i+1}, sparar diffbild...")
-            diff.save(f"diff_page_{i+1}.png")
-            img_a.save(f"page_{i+1}_A.png")
-            img_b.save(f"page_{i+1}_B.png")
+            col1, col2 = st.columns(2)
+            col1.image(img_a, caption="Version A")
+            col2.image(img_b, caption="Version B")
+            st.image(diff, caption="🔍 Visuell skillnad (diff)")
+        else:
+            st.success("Ingen visuell skillnad")
 
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Använd: python test_compare.py path_till_pdf_A path_till_pdf_B")
-        sys.exit(1)
-
-    compare_pdfs(sys.argv[1], sys.argv[2])
-
+if file1 and file2:
+    compare_pdfs_bytes(file1.read(), file2.read())
